@@ -1,5 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
-import { MessagePattern, Payload } from '@nestjs/microservices';
+import { Controller } from '@nestjs/common';
+import {
+  Ctx,
+  MessagePattern,
+  Payload,
+  RmqContext,
+} from '@nestjs/microservices';
 import { RmqProcessService } from './rmq-process.service';
 import { NotificationPayload } from './interfaces/notification.interface';
 
@@ -7,14 +12,12 @@ import { NotificationPayload } from './interfaces/notification.interface';
 export class RmqProcessController {
   constructor(private readonly rmqProcessService: RmqProcessService) {}
 
-  @Get()
-  getHello(): string {
-    return this.rmqProcessService.getHello();
-  }
-
   @MessagePattern('notification_rmq')
-  handleNotification(@Payload() data: NotificationPayload) {
+  handleNotification(
+    @Payload() data: NotificationPayload,
+    @Ctx() context: RmqContext,
+  ) {
     console.log('Received message from RabbitMQ:', data);
-    return this.rmqProcessService.processNotification(data);
+    return this.rmqProcessService.processNotification(data, context);
   }
 }
