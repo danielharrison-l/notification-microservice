@@ -13,7 +13,7 @@ export class RmqProcessController {
   constructor(private readonly rmqProcessService: RmqProcessService) {}
 
   @MessagePattern('notification_rmq')
-  handleNotification(
+  async handleNotification(
     @Payload() data: NotificationPayload,
     @Ctx() context: RmqContext,
   ) {
