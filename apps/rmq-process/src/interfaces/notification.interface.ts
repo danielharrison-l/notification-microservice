@@ -1,6 +1,7 @@
 export interface NotificationPayload {
-  message: string;
-  phoneNumber?: string;
+  message?: string;
   templateName?: string;
-  messageType?: 'text' | 'template';
+  phones: string[];
+  messageType: 'text' | 'template';
+  parameters?: Array<{ type: string; text: string }>;
 }

@@ -8,6 +8,7 @@ export const envSchema = z.object({
   WHATSAPP_API_URL: z.url(),
   WHATSAPP_API_VERSION: z.string(),
   WHATSAPP_PHONE_NUMBER_ID: z.string().min(10),
+  PHONE_NUMBER: z.string().min(10),
 });
 
 export type EnvSchema = z.infer<typeof envSchema>;
@@ -19,6 +20,7 @@ export const env: EnvSchema = {
   WHATSAPP_API_URL: process.env.WHATSAPP_API_URL as string,
   WHATSAPP_API_VERSION: process.env.WHATSAPP_API_VERSION as string,
   WHATSAPP_PHONE_NUMBER_ID: process.env.WHATSAPP_PHONE_NUMBER_ID as string,
+  PHONE_NUMBER: process.env.PHONE_NUMBER as string,
 };
 
 const isEnvValid = Object.values(env).every(

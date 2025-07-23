@@ -4,6 +4,18 @@ import { RmqContext } from '@nestjs/microservices';
 import { Channel, Message } from 'amqplib';
 import { WhatsappService } from './whatsapp/whatsapp.service';
 
+interface ProcessResult {
+  phoneNumber: string;
+  messageId: string;
+  status: 'success';
+}
+
+interface ProcessError {
+  phoneNumber: string;
+  error: string;
+  status: 'failed';
+}
+
 @Injectable()
 export class RmqProcessService {
   private readonly logger = new Logger(RmqProcessService.name);
@@ -20,39 +32,84 @@ export class RmqProcessService {
     try {
       this.logger.log('Processing notification:', data);
 
-      const phoneNumber = data.phoneNumber || '5591981415677';
-      const messageType = data.messageType || 'text';
-
-      let whatsappResponse;
-
-      if (messageType === 'template' && data.templateName) {
-        whatsappResponse = await this.whatsappService.sendTemplateMessage(
-          phoneNumber,
-          data.templateName,
-          'pt_BR',
-        );
-      } else {
-        whatsappResponse = await this.whatsappService.sendTextMessage(
-          phoneNumber,
-          data.message,
-        );
+      if (!data.phones || data.phones.length === 0) {
+        throw new Error('No phone numbers provided');
       }
 
-      this.logger.log('WhatsApp message sent successfully:', whatsappResponse);
+      if (data.messageType !== 'template') {
+        throw new Error('Only template messages are currently supported');
+      }
+
+      if (!data.templateName) {
+        throw new Error('Template name is required for template messages');
+      }
+
+      const results: ProcessResult[] = [];
+      const errors: ProcessError[] = [];
+
+      const promises = data.phones.map((phoneNumber) =>
+        this.whatsappService
+          .sendTemplateMessage(phoneNumber, data.templateName!, data.parameters)
+          .then((whatsappResponse) => ({
+            phoneNumber,
+            messageId: whatsappResponse.messages?.[0]?.id || 'unknown',
+            status: 'success',
+          }))
+          .catch((error) => ({
+            phoneNumber,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            status: 'failed',
+          })),
+      );
+
+      const settledResults = await Promise.all(promises);
+
+      settledResults.forEach((result) => {
+        if (result.status === 'success') results.push(result as ProcessResult);
+        else errors.push(result as ProcessError);
+      });
+
+      this.logger.log(
+        `Notification processing completed. Success: ${results.length}, Errors: ${errors.length}`,
+      );
+
+      if (errors.length > 0) {
+        this.logger.warn('Some messages failed to send:', errors);
+      }
 
       channel.ack(originalMessage);
 
-      const messageId =
-        (whatsappResponse.messages?.[0]?.id as string) || 'unknown';
-      return `Notification processed and sent to WhatsApp. Message ID: ${messageId}`;
+      return JSON.stringify({
+        message: 'Notification processing completed',
+        totalNumbers: data.phones.length,
+        successCount: results.length,
+        errorCount: errors.length,
+        results,
+        errors,
+      });
     } catch (error) {
       this.logger.error('Failed to process notification:', error);
 
-      channel.nack(originalMessage, false, true);
+      channel.ack(originalMessage);
 
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Failed to send WhatsApp message: ${errorMessage}`);
+
+      return JSON.stringify({
+        message: 'Failed to process notification',
+        error: errorMessage,
+        totalNumbers: 0,
+        successCount: 0,
+        errorCount: 1,
+        results: [],
+        errors: [
+          {
+            phoneNumber: 'unknown',
+            error: errorMessage,
+            status: 'failed',
+          },
+        ],
+      });
     }
   }
 }
